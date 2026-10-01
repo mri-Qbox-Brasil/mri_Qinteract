@@ -1,0 +1,13 @@
+{
+  "interact": "Interagir",
+  "hold": "Segurar",
+  "no_permission": "Sem permissão pra abrir o painel.",
+  "keybind_interact": "Interagir com o que está na mira",
+  "keybind_toggle": "Mostrar ou esconder as interações",
+  "toggle_front_driver_door": "Abrir/fechar porta do motorista",
+  "toggle_front_passenger_door": "Abrir/fechar porta do passageiro",
+  "toggle_rear_driver_door": "Abrir/fechar porta traseira esquerda",
+  "toggle_rear_passenger_door": "Abrir/fechar porta traseira direita",
+  "toggle_hood": "Abrir/fechar capô",
+  "toggle_trunk": "Abrir/fechar porta-malas"
+}

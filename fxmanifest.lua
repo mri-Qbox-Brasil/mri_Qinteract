@@ -5,7 +5,7 @@ game 'gta5'
 
 name 'mri_Qinteract'
 author 'MRI Qbox Brasil'
-version '1.0.0'
+version '1.0.1'
 description 'AAA-Grade Interaction Experience for FiveM'
 
 ox_lib 'locale'
@@ -29,7 +29,7 @@ server_scripts {
 files {
 	'locales/*.json',
 	'web/build/**',
-	'web/markers/*.png',
+	'markers/*.png',
 	'client/**/*.lua',
 	'shared/*.lua',
 	'data/*.json',

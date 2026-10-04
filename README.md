@@ -307,8 +307,10 @@ Dentro de `web/`:
   troca, `?compact` liga o modo compacto, `?v=block|glass|outline|round`
   troca o tema); `/admin.html` mostra o painel.
 - `pnpm build`: gera `web/build`, que é o que o resource carrega.
-- `pnpm markers`: gera `web/markers/*.png` a partir de
-  `web/src/markers/shapes.ts` (64x64, brancas; o Lua pinta).
+- `pnpm markers`: gera `markers/<forma>_<px>.png` a partir de
+  `web/src/markers/shapes.ts`, brancas (o Lua pinta), em vários tamanhos de
+  8 a 128 px. Textura de runtime não tem mipmap: o Lua desenha sempre o
+  tamanho mais próximo do que aparece na tela, senão a forma serrilha.
 
 O CEF do FiveM é Chrome 103: nada de `color-mix` nem `translate`/`scale` como
 propriedades soltas no CSS.

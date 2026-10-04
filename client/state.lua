@@ -22,7 +22,10 @@ local loadedShapes = {}
 
 local function ensureShape(shape)
     if loadedShapes[shape] then return end
-    CreateRuntimeTextureFromImage(CreateRuntimeTxd(settings.markerDict(shape)), 'marker', settings.markerFile(shape))
+    local txd = CreateRuntimeTxd(settings.markerDict(shape))
+    for i, px in ipairs(settings.markerLevels) do
+        CreateRuntimeTextureFromImage(txd, settings.markerTextures[i], settings.markerFile(shape, px))
+    end
     loadedShapes[shape] = true
 end
 
@@ -30,7 +33,6 @@ local function markerSprite(marker, accent)
     return {
         enabled = marker.enabled,
         dict = settings.markerDict(marker.shape),
-        txt = 'marker',
         twist = settings.markerTwist[marker.shape] == true,
         color = settings.toRgba(marker.useAccent and accent or marker.color, marker.opacity),
         size = marker.size,

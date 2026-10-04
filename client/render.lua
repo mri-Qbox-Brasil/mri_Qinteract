@@ -14,6 +14,7 @@ local markers = require 'client.markers'
 local options = require 'client.options'
 local scan = require 'client.scan'
 local state = require 'client.state'
+local settings = require 'shared.settings'
 
 -- Depois de confirmar, a tecla espera isso antes de aceitar outra (o loader na pagina).
 local COOLDOWN_MS = 750
@@ -26,6 +27,9 @@ local REACT_GROW = 0.45
 local PROMPT_ASPECT = 2.4
 -- Any focused NUI (inventory, phone, menus) hides the world layer.
 local NO_TARGETS = {}
+
+-- Screen width in px this frame, to pick the marker texture level.
+local screenWidth = 1920
 
 local focus -- { key, target, options = { ... } }
 local lastAnchor
@@ -167,7 +171,7 @@ end
 
 local function drawMarker(sprite, coords, size, rotation, r, g, b, a, aspect)
     SetDrawOrigin(coords.x, coords.y, coords.z, 0)
-    DrawSprite(sprite.dict, sprite.txt, 0.0, 0.0, size, size * aspect, rotation, r, g, b, a)
+    DrawSprite(sprite.dict, settings.markerTexture(size * screenWidth), 0.0, 0.0, size, size * aspect, rotation, r, g, b, a)
     ClearDrawOrigin()
 end
 
@@ -241,7 +245,7 @@ local function drawCenterDot(inRange, now, aspect)
     end
 
     local size = dot.size * pop * (1.0 + REACT_GROW * react)
-    DrawSprite(dot.dict, dot.txt, 0.5, 0.5, size, size * aspect, dot.twist and twist or 0.0, r, g, b,
+    DrawSprite(dot.dict, settings.markerTexture(size * screenWidth), 0.5, 0.5, size, size * aspect, dot.twist and twist or 0.0, r, g, b,
         math.floor(color[4] * alpha + 0.5))
 end
 
@@ -329,6 +333,7 @@ CreateThread(function()
             Wait(0)
             now = GetGameTimer()
             local aspect = GetAspectRatio(true)
+            screenWidth = GetActiveScreenResolution()
             local best, anchors = pickFocus(targets, aspect)
             setFocus(best)
 

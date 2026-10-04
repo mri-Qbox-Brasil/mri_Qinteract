@@ -8,7 +8,7 @@ local settings = {}
 
 settings.themes = { block = true, glass = true, outline = true, round = true }
 
--- Formas dos marcadores: web/markers/<shape>.png (geradas de web/src/markers/shapes.ts).
+-- Formas dos marcadores: markers/<shape>_<px>.png (geradas de web/src/markers/shapes.ts).
 settings.markerShapes = {
     target = true, dot = true, ring = true, diamond = true, rhombus = true, square = true,
     eye = true, hand = true, arrow = true, crosshair = true,
@@ -137,8 +137,25 @@ function settings.markerDict(shape)
     return 'mri_marker_' .. shape
 end
 
-function settings.markerFile(shape)
-    return ('web/markers/%s.png'):format(shape)
+-- Pre-rendered sizes in px (web/scripts/markers.mjs): runtime textures have no mipmaps.
+settings.markerLevels = { 8, 12, 16, 24, 32, 48, 64, 96, 128 }
+
+settings.markerTextures = {}
+for i, px in ipairs(settings.markerLevels) do settings.markerTextures[i] = ('marker_%d'):format(px) end
+
+function settings.markerFile(shape, px)
+    return ('markers/%s_%d.png'):format(shape, px)
+end
+
+--- Texture of the smallest level that covers px on screen.
+---@param px number
+---@return string
+function settings.markerTexture(px)
+    local levels = settings.markerLevels
+    for i = 1, #levels do
+        if levels[i] >= px then return settings.markerTextures[i] end
+    end
+    return settings.markerTextures[#levels]
 end
 
 ---@param hex string #RRGGBB

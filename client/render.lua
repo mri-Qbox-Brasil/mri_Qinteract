@@ -27,6 +27,8 @@ local REACT_GROW = 0.45
 local PROMPT_ASPECT = 2.4
 -- Any focused NUI (inventory, phone, menus) hides the world layer.
 local NO_TARGETS = {}
+-- Keeps hiding a bit after the action ends, so it doesn't flicker between shots or sprints.
+local ACTION_GRACE_MS = 400
 
 -- Screen width in px this frame, to pick the marker texture level.
 local screenWidth = 1920
@@ -35,6 +37,13 @@ local focus -- { key, target, options = { ... } }
 local lastAnchor
 local hideUntil = 0
 local cooldownUntil = 0
+-- Recolher quando parado: desde quando o prompt esta parado e se ja recolheu.
+local shownAt = 0
+local dormant = false
+local pressing = false
+local actionUntil = 0
+-- Only claim the E controls when the player's interact key is E (set on each new focus).
+local keyIsE = false
 
 local indicatorFades = {}
 local dotFade = markers.new()
@@ -101,6 +110,7 @@ local function setFocus(target)
             dui.send('visible', false)
             options.endHold()
             hideUntil = GetGameTimer() + HIDE_MS
+            dormant = false
             focus = nil
             state.focused = false
         end
@@ -122,7 +132,13 @@ local function setFocus(target)
     active = nil
     focus = { key = target.key, target = target, options = target.reach, index = 1 }
     state.focused = true
-    dui.send('setKey', input.keyLabel())
+    shownAt = GetGameTimer()
+    -- The page may still be dormant from the last target (it fades out as is).
+    dormant = false
+    dui.send('dormant', false)
+    local keyLabel = input.keyLabel()
+    keyIsE = keyLabel == 'E'
+    dui.send('setKey', keyLabel)
     dui.send('setOptions', { options = payload(focus.options), resetIndex = true })
     dui.send('visible', true)
     updateActive()
@@ -249,6 +265,16 @@ local function drawCenterDot(inRange, now, aspect)
         math.floor(color[4] * alpha + 0.5))
 end
 
+-- Default E controls (pickup, talk, context; horn in a vehicle): with a prompt open, other scripts can't take the same press.
+local KEY_CONTROLS = { 38, 46, 51 }
+local VEHICLE_KEY_CONTROL = 86
+
+local function claimKey()
+    if not keyIsE then return end
+    for i = 1, #KEY_CONTROLS do DisableControlAction(0, KEY_CONTROLS[i], true) end
+    if cache.vehicle then DisableControlAction(0, VEHICLE_KEY_CONTROL, true) end
+end
+
 -- Roda do mouse e setas trocam a opcao (sem trocar de arma).
 local SCROLL_UP = { 15, 17, 241, 172 }
 local SCROLL_DOWN = { 14, 16, 242, 173 }
@@ -265,12 +291,37 @@ local function handleScroll()
     end
 end
 
+local function setDormant(value)
+    dormant = value
+    shownAt = GetGameTimer()
+    dui.send('dormant', value)
+end
+
+--- Jogador fazendo outra coisa (painel: actionHide): some com tudo do mundo.
+local function inAction(now)
+    local hide = state.settings.actionHide
+    local ped = cache.ped
+    local busy = (hide.aiming and IsPlayerFreeAiming(cache.playerId))
+        or (hide.combat and (IsPedInMeleeCombat(ped) or IsPedShooting(ped)))
+        or (hide.sprinting and IsPedSprinting(ped))
+        or (hide.vehicle and cache.vehicle and GetEntitySpeed(cache.vehicle) * 3.6 > hide.vehicleSpeed)
+
+    if busy then actionUntil = now + ACTION_GRACE_MS end
+    return now < actionUntil
+end
+
 input.onPress = function()
-    if not focus or GetGameTimer() < cooldownUntil then return end
+    if not focus then return end
+    -- Recolhido: a tecla so traz o prompt de volta, sem confirmar nada.
+    if dormant then return setDormant(false) end
+    if GetGameTimer() < cooldownUntil then return end
+    pressing = true
     dui.send('interact')
 end
 
 input.onRelease = function()
+    pressing = false
+    shownAt = GetGameTimer()
     dui.send('release')
 end
 
@@ -317,14 +368,15 @@ RegisterNUICallback('currentOption', function(data, cb)
     local index = type(data) == 'table' and tonumber(data[1])
     if focus and index then
         focus.index = index
+        shownAt = GetGameTimer()
         updateActive()
     end
 end)
 
 CreateThread(function()
     while true do
-        local targets = IsNuiFocused() and NO_TARGETS or scan.targets
         local now = GetGameTimer()
+        local targets = (IsNuiFocused() or inAction(now)) and NO_TARGETS or scan.targets
         local busy = #targets > 0 or focus or now < hideUntil or next(indicatorFades) or dotFade.value > 0.01
 
         if not busy then
@@ -344,10 +396,20 @@ CreateThread(function()
 
             drawIndicators(targets, anchors, now, aspect)
 
+            local s = state.settings
+            if focus and not pressing then
+                if dormant and not s.dormant then
+                    setDormant(false)
+                elseif not dormant and s.dormant and now - shownAt >= s.dormantMs then
+                    setDormant(true)
+                end
+            end
+
             if focus then
                 lastAnchor = anchors[focus.key] or lastAnchor
                 if lastAnchor and dui.ready then drawPrompt(lastAnchor, aspect) end
-                if #focus.options > 1 then handleScroll() end
+                claimKey()
+                if not dormant and #focus.options > 1 then handleScroll() end
                 if active and active.whileActive then callHook(active, 'whileActive') end
             elseif now < hideUntil and lastAnchor and dui.ready then
                 drawPrompt(lastAnchor, aspect)
@@ -364,6 +426,7 @@ dui.onReady(function()
     if focus then
         dui.send('setKey', input.keyLabel())
         dui.send('setOptions', { options = payload(focus.options), resetIndex = true })
+        dui.send('dormant', dormant)
         dui.send('visible', true)
     end
 end)

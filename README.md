@@ -104,7 +104,7 @@ os padrões de `shared/settings.lua`.
 | Seção | Opções |
 |---|---|
 | Visual do prompt | tema (vidro, bloco, contorno, circular), cor própria ou a da suíte, ícones, tamanho |
-| Comportamento | modo compacto e tempo pra fechar, tecla de interagir, tecla de mostrar/esconder (alternar ou segurar), som ao confirmar |
+| Comportamento | modo compacto e tempo pra fechar, recolher quando parado e tempo, esconder em ação (mirando, em combate, correndo, dirigindo acima de X km/h), tecla de interagir, tecla de mostrar/esconder (alternar ou segurar), som ao confirmar |
 | Alcance e mira | distância do marcador, alcance padrão das opções, marcadores de longe ao mesmo tempo, exigir olhar pro alvo, área de mira do marcador, exigir linha de visão |
 | Marcadores | marcador distante e ponto central: ligado, forma (alvo, ponto, anel, diamante, losango vazado, quadrado, olho, mão, seta, mira em cruz), cor própria ou a de destaque, opacidade, tamanho; pulso no marcador distante; reagir ao alvo no ponto central |
 
@@ -115,6 +115,8 @@ Padrões da base:
 | Tema | bloco |
 | Cor de destaque | `#FFFFFF` |
 | Modo compacto | desligado |
+| Recolher quando parado | desligado (5 s quando ligado) |
+| Esconder em ação | mirando, em combate, correndo e dirigindo acima de 30 km/h |
 | Distância do marcador | 5 m |
 | Alcance padrão | 3 m |
 | Marcadores de longe | 2 |
@@ -136,6 +138,11 @@ Keybinds do FiveM (o jogador troca em Configurações > Teclas > FiveM):
 |---|---|---|
 | `mri_interact` | `E` | Confirma a opção ativa (segura nas que têm `holdTime`) |
 | `mri_interact_toggle` | `LMENU` (Alt) | Com "tecla pra mostrar/esconder" ligada, só mostra interação com ela, alternando ou enquanto segura |
+
+Com um prompt aberto e a tecla de interagir em `E`, os controles do E (`38`, `46`,
+`51` e, no veículo, `86`) ficam desabilitados: script que lê o E com
+`IsControlJustPressed` não dispara junto. Script com keybind próprio no E
+(`RegisterKeyMapping`) ou que lê com `IsDisabledControlJustPressed` ainda dispara.
 
 ---
 
@@ -304,7 +311,8 @@ data/config.json   Settings salvos pelo painel (estado do servidor)
 Dentro de `web/`:
 
 - `pnpm dev`: `/` mostra o prompt com opções de exemplo (`E` interage, a roda
-  troca, `?compact` liga o modo compacto, `?v=block|glass|outline|round`
+  troca, `?compact` liga o modo compacto, `?dormant` mostra o prompt
+  recolhido, `?v=block|glass|outline|round`
   troca o tema); `/admin.html` mostra o painel.
 - `pnpm build`: gera `web/build`, que é o que o resource carrega.
 - `pnpm markers`: gera `markers/<forma>_<px>.png` a partir de

@@ -28,6 +28,11 @@ settings.defaults = {
     -- Comportamento
     compact = false,
     compactIdleMs = 2500,
+    -- Prompt parado no mesmo alvo recolhe pra so a tecla, apagada; volta ao mirar de novo ou apertar a tecla.
+    dormant = false,
+    dormantMs = 5000,
+    -- Some com prompt e marcadores enquanto o jogador faz outra coisa (vehicleSpeed em km/h).
+    actionHide = { aiming = true, combat = true, sprinting = true, vehicle = true, vehicleSpeed = 30 },
     interactKey = 'E', -- padrao do keybind; so vale no restart e pra quem nunca trocou
     useShowKey = false,
     showKey = 'LMENU',
@@ -55,6 +60,8 @@ settings.defaults = {
 local ranges = {
     promptScale = { 0.1, 0.35 },
     compactIdleMs = { 500, 10000 },
+    dormantMs = { 1000, 30000 },
+    ['actionHide.vehicleSpeed'] = { 0, 200 },
     markerDistance = { 1.0, 15.0 },
     defaultDistance = { 1.0, 15.0 },
     maxIndicators = { 0, 20 },

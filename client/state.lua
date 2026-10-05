@@ -77,19 +77,7 @@ function state.onChange(fn)
     listeners[#listeners + 1] = fn
 end
 
--- Boot: o arquivo distribuido com o resource. O valor atual do server chega
--- pelo client/panel.lua logo depois.
-do
-    local raw = LoadResourceFile(cache.resource, 'data/config.json')
-    local saved
-
-    if raw and raw ~= '' then
-        local ok, decoded = pcall(json.decode, raw)
-        if ok then saved = decoded else lib.print.warn('data/config.json invalido, usando os padroes') end
-    end
-
-    state.settings = settings.merge(saved)
-    resolve()
-end
+-- Boot: the defaults; the saved config comes from the server (client/panel.lua).
+resolve()
 
 return state

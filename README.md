@@ -103,8 +103,8 @@ os padrões de `shared/settings.lua`.
 
 | Seção | Opções |
 |---|---|
-| Visual do prompt | tema (vidro, bloco, contorno, circular), cor própria ou a da suíte, ícones, tamanho |
-| Comportamento | modo compacto e tempo pra fechar, recolher quando parado e tempo, esconder em ação (mirando, em combate, correndo, dirigindo acima de X km/h), tecla de interagir, tecla de mostrar/esconder (alternar ou segurar), som ao confirmar |
+| Visual do prompt | tema (seguir a suíte, vidro, bloco, contorno, circular, vidro líquido), cor própria ou a da suíte, ícones, tamanho |
+| Comportamento | modo compacto e tempo pra fechar, recolher quando parado e tempo, esconder em ação (mirando, em combate, correndo, dirigindo acima de X km/h), tecla de interagir, tecla pra esconder o alvo, tecla de mostrar/esconder (alternar ou segurar), som ao confirmar |
 | Alcance e mira | distância do marcador, alcance padrão das opções, marcadores de longe ao mesmo tempo, exigir olhar pro alvo, área de mira do marcador, exigir linha de visão |
 | Marcadores | marcador distante e ponto central: ligado, forma (alvo, ponto, anel, diamante, losango vazado, quadrado, olho, mão, seta, mira em cruz), cor própria ou a de destaque, opacidade, tamanho; pulso no marcador distante; reagir ao alvo no ponto central |
 
@@ -112,9 +112,10 @@ Padrões da base:
 
 | Opção | Padrão |
 |---|---|
-| Tema | bloco |
+| Tema | seguir a suíte (vidro líquido com o `/uiconfig` em líquido, senão bloco) |
 | Cor de destaque | `#FFFFFF` |
 | Modo compacto | desligado |
+| Tecla pra esconder | ligada, Backspace |
 | Recolher quando parado | desligado (5 s quando ligado) |
 | Esconder em ação | mirando, em combate, correndo e dirigindo acima de 30 km/h |
 | Distância do marcador | 5 m |
@@ -128,6 +129,17 @@ Padrões da base:
 A letra das teclas no painel é o padrão do keybind: vale depois de reiniciar
 o resource e só para quem nunca trocou a tecla nas configurações do jogo.
 
+### Vidro líquido
+
+O tema `liquid` não usa a DUI: o prompt é desenhado na `ui_page`, por cima da
+tela, e o Lua manda a posição do alvo na tela a cada frame (`client/dui.lua`,
+`dui.place`). Atrás da tecla e da lista vai o jogo desfocado pelo
+`startGameGlass` do `@mriqbox/ui-kit`; a tecla tem a borda que refrata. Os
+outros temas seguem na DUI, presos no mundo no mesmo frame. O tema "Seguir a suíte"
+vira vidro líquido quando o `/uiconfig` do mri_lib está no tema líquido e bloco
+nos outros; trocar no `/uiconfig` muda o prompt na hora. A escolha pessoal de tema
+do jogador (menu `/ox_lib`) ainda não conta, só o tema do servidor.
+
 ---
 
 ## Teclas
@@ -137,6 +149,7 @@ Keybinds do FiveM (o jogador troca em Configurações > Teclas > FiveM):
 | Nome | Padrão | O que faz |
 |---|---|---|
 | `mri_interact` | `E` | Confirma a opção ativa (segura nas que têm `holdTime`) |
+| `mri_interact_dismiss` | `BACK` (Backspace) | Esconde a interação do alvo na mira (prompt e marcador) até sair do alcance dele e voltar. Desliga no painel |
 | `mri_interact_toggle` | `LMENU` (Alt) | Com "tecla pra mostrar/esconder" ligada, só mostra interação com ela, alternando ou enquanto segura |
 
 Com um prompt aberto e a tecla de interagir em `E`, os controles do E (`38`, `46`,
@@ -255,8 +268,12 @@ As opções de um resource saem sozinhas quando ele para.
 
 ## Opções padrão nos veículos
 
-Todo veículo destrancado ganha abrir/fechar das quatro portas, capô e
-porta-malas, cada uma no osso dela (alcance de 1,5 m). Portas arrancadas ou
+Todo veículo destrancado ganha abrir e fechar das quatro portas, capô e
+porta-malas. As portas ficam no osso delas (alcance de 1,5 m); capô e
+porta-malas na ponta da frente e de trás do carro, na meia altura (alcance de
+2 m), porque o osso deles é a dobradiça. O prompt mostra só a ação que vale
+agora, só com o verbo ("Abrir" ou "Fechar"), e o ícone mostra a peça (carro de
+lado nas portas, de frente no capô, de trás no porta-malas). Portas arrancadas ou
 inexistentes não aparecem.
 
 ---
@@ -311,7 +328,8 @@ data/config.json   Settings salvos pelo painel (estado do servidor)
 Dentro de `web/`:
 
 - `pnpm dev`: `/` mostra o prompt com opções de exemplo (`E` interage, a roda
-  troca, `?compact` liga o modo compacto, `?dormant` mostra o prompt
+  troca, `?compact` liga o modo compacto, `?glass` liga o vidro sobre uma
+  imagem de teste (com `?v=liquid`), `?dormant` mostra o prompt
   recolhido, `?v=block|glass|outline|round`
   troca o tema); `/admin.html` mostra o painel.
 - `pnpm build`: gera `web/build`, que é o que o resource carrega.

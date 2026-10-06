@@ -1,6 +1,8 @@
 --[[
     Teclas (keybinds do FiveM, o jogador troca em Configuracoes > Teclas):
     - mri_interact: confirma a opcao (segurar nas que tem holdTime);
+    - mri_interact_dismiss: esconde a interacao do alvo em foco ate sair do
+      alcance dele e voltar ("tecla pra esconder" no painel);
     - mri_interact_toggle: com "tecla pra mostrar/esconder" ligada no painel,
       so aparece interacao com ela (alternar ou segurar). Fica sempre
       registrada; o painel liga, desliga e troca o modo na hora.
@@ -14,6 +16,7 @@ local input = {
     -- O client/render.lua preenche.
     onPress = function() end,
     onRelease = function() end,
+    onDismiss = function() end,
 }
 
 local showHeld = false
@@ -50,6 +53,15 @@ lib.addKeybind({
     onReleased = function()
         showHeld = false
         if state.settings.useShowKey and state.settings.showKeyBehavior == 'hold' then scan.refresh() end
+    end,
+})
+
+lib.addKeybind({
+    name = 'mri_interact_dismiss',
+    description = locale('keybind_dismiss'),
+    defaultKey = state.settings.dismissKey,
+    onPressed = function()
+        if state.settings.dismiss then input.onDismiss() end
     end,
 })
 

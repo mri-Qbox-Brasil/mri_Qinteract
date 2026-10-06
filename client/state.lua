@@ -9,6 +9,8 @@ local settings = require 'shared.settings'
 local state = {
     settings = settings.merge(nil),
     suiteAccent = GetConvar('mri:color', '#00E699'),
+    -- Tema do /uiconfig (client/panel.lua); decide o tema 'suite' do prompt.
+    suiteTheme = 'glass',
     -- disableTargeting / exports: some com tudo enquanto true.
     disabled = false,
     -- Tem prompt aberto num alvo agora (client/render.lua).
@@ -48,6 +50,7 @@ local function resolve()
     if s.centerDot.enabled then ensureShape(s.centerDot.shape) end
 
     state.accent = accent
+    state.theme = settings.resolveTheme(s, state.suiteTheme)
     state.indicator = markerSprite(s.indicator, accent)
     state.indicator.pulse = s.indicator.pulse
     state.centerDot = markerSprite(s.centerDot, accent)
@@ -67,6 +70,15 @@ end
 ---@param color string
 function state.setSuiteAccent(color)
     state.suiteAccent = color
+    resolve()
+
+    for i = 1, #listeners do listeners[i](state.settings, state.settings) end
+end
+
+---@param theme string? tema do /uiconfig
+function state.setSuiteTheme(theme)
+    if type(theme) ~= 'string' or theme == state.suiteTheme then return end
+    state.suiteTheme = theme
     resolve()
 
     for i = 1, #listeners do listeners[i](state.settings, state.settings) end

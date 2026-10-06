@@ -42,6 +42,8 @@ local shownAt = 0
 local dormant = false
 local pressing = false
 local actionUntil = 0
+-- Targets hidden by the dismiss key until they leave interaction reach.
+local dismissed = {}
 -- Only claim the E controls when the player's interact key is E (set on each new focus).
 local keyIsE = false
 
@@ -164,7 +166,7 @@ local function pickFocus(targets, aspect)
         local anchor = scan.anchorOf(target)
         anchors[target.key] = anchor
 
-        if anchor and #target.reach > 0 then
+        if anchor and #target.reach > 0 and not dismissed[target.key] then
             local sq = screenDistanceSq(anchor, aspect)
             if sq and (not s.requireLookAt or sq <= radiusSq) and (not bestSq or sq < bestSq) then
                 best, bestSq = target, sq
@@ -176,6 +178,8 @@ local function pickFocus(targets, aspect)
 end
 
 local function drawPrompt(anchor, aspect)
+    if dui.isOverlay() then return dui.place(anchor) end
+
     local height = state.settings.promptScale
     local width = height * PROMPT_ASPECT / aspect
 
@@ -201,7 +205,7 @@ local function drawIndicators(targets, anchors, now, aspect)
         for i = 1, #targets do
             if count >= s.maxIndicators then break end
             local target = targets[i]
-            if not focus or focus.key ~= target.key then
+            if (not focus or focus.key ~= target.key) and not dismissed[target.key] then
                 local anchor = anchors[target.key]
                 if anchor then
                     count = count + 1
@@ -319,6 +323,26 @@ input.onPress = function()
     dui.send('interact')
 end
 
+input.onDismiss = function()
+    if not focus then return end
+    dismissed[focus.key] = true
+    -- Sem foco nao chega o release: a tecla de interagir nao fica presa.
+    pressing = false
+end
+
+--- Libera quem saiu do alcance (sem opcao em reach) ou sumiu do scan.
+local function releaseDismissed()
+    if not next(dismissed) then return end
+    local inReach = {}
+    local targets = scan.targets
+    for i = 1, #targets do
+        if #targets[i].reach > 0 then inReach[targets[i].key] = true end
+    end
+    for key in pairs(dismissed) do
+        if not inReach[key] then dismissed[key] = nil end
+    end
+end
+
 input.onRelease = function()
     pressing = false
     shownAt = GetGameTimer()
@@ -376,7 +400,8 @@ end)
 CreateThread(function()
     while true do
         local now = GetGameTimer()
-        local targets = (IsNuiFocused() or inAction(now)) and NO_TARGETS or scan.targets
+        local targets = (IsNuiFocused() or IsPauseMenuActive() or inAction(now)) and NO_TARGETS or scan.targets
+        releaseDismissed()
         local busy = #targets > 0 or focus or now < hideUntil or next(indicatorFades) or dotFade.value > 0.01
 
         if not busy then
@@ -407,11 +432,11 @@ CreateThread(function()
 
             if focus then
                 lastAnchor = anchors[focus.key] or lastAnchor
-                if lastAnchor and dui.ready then drawPrompt(lastAnchor, aspect) end
+                if lastAnchor and dui.isReady() then drawPrompt(lastAnchor, aspect) end
                 claimKey()
                 if not dormant and #focus.options > 1 then handleScroll() end
                 if active and active.whileActive then callHook(active, 'whileActive') end
-            elseif now < hideUntil and lastAnchor and dui.ready then
+            elseif now < hideUntil and lastAnchor and dui.isReady() then
                 drawPrompt(lastAnchor, aspect)
             end
 
@@ -420,13 +445,25 @@ CreateThread(function()
     end
 end)
 
--- Pagina (re)carregada: texto do resumo compacto; o foco aberto volta a aparecer.
-dui.onReady(function()
+--- Prompt aberto de novo na superficie atual (pagina recarregada ou troca de tema).
+local function resendFocus()
     dui.send('setLabel', locale('interact'))
-    if focus then
-        dui.send('setKey', input.keyLabel())
-        dui.send('setOptions', { options = payload(focus.options), resetIndex = true })
-        dui.send('dormant', dormant)
-        dui.send('visible', true)
-    end
+    if not focus then return end
+    dui.send('setKey', input.keyLabel())
+    dui.send('setOptions', { options = payload(focus.options), resetIndex = true })
+    dui.send('dormant', dormant)
+    dui.send('visible', true)
+end
+
+dui.onReady(resendFocus)
+
+-- Tema liquid fica no overlay e os outros na DUI: trocar com prompt aberto muda de superficie.
+local overlayMode = dui.isOverlay()
+
+state.onChange(function()
+    local was = overlayMode
+    overlayMode = dui.isOverlay()
+    if was == overlayMode then return end
+    dui.sendTo(was, 'visible', false)
+    resendFocus()
 end)

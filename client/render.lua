@@ -154,7 +154,7 @@ local function screenDistanceSq(coords, aspect)
     return dx * dx + dy * dy
 end
 
---- Melhor alvo agora e as posicoes de todos (pra nao recalcular no desenho).
+--- Melhor alvo agora e as posicoes de quem aparece (pra nao recalcular no desenho).
 local function pickFocus(targets, aspect)
     local s = state.settings
     local radiusSq = s.lookRadius * s.lookRadius
@@ -163,7 +163,8 @@ local function pickFocus(targets, aspect)
 
     for i = 1, #targets do
         local target = targets[i]
-        local anchor = scan.anchorOf(target)
+        -- Only focus candidates and the first markers need a position this frame.
+        local anchor = (#target.reach > 0 or i <= s.maxIndicators + 1) and scan.anchorOf(target) or nil
         anchors[target.key] = anchor
 
         if anchor and #target.reach > 0 and not dismissed[target.key] then

@@ -46,6 +46,23 @@ local function usable(vehicle, index)
     return unlocked(vehicle) and not IsVehicleDoorDamaged(vehicle, index) and GetIsDoorValid(vehicle, index)
 end
 
+-- Door state read once per scan refresh, shared by its open and close options.
+local doorCache, doorCacheAt = {}, 0
+
+local function doorState(vehicle, index)
+    local now = GetGameTimer()
+    if now - doorCacheAt > 50 then doorCache, doorCacheAt = {}, now end
+
+    local key = vehicle * 8 + index
+    local door = doorCache[key]
+    if not door then
+        local ok = usable(vehicle, index)
+        door = { usable = ok, open = ok and isOpen(vehicle, index) }
+        doorCache[key] = door
+    end
+    return door
+end
+
 local options = {}
 for _, door in ipairs(DOORS) do
     for _, open in ipairs({ true, false }) do
@@ -58,7 +75,8 @@ for _, door in ipairs(DOORS) do
             offset = door.offset,
             distance = door.distance or 1.5,
             canInteract = function(vehicle)
-                return usable(vehicle, door.index) and isOpen(vehicle, door.index) ~= open
+                local current = doorState(vehicle, door.index)
+                return current.usable and current.open ~= open
             end,
             onSelect = function(data)
                 setDoor(data.entity, door.index, open)

@@ -1,8 +1,11 @@
 --[[
-    Varredura do que esta por perto (a cada SCAN_MS ou na hora com
-    scan.refresh). Cada alvo e um lugar onde o prompt pode abrir: um ponto, o
-    centro de uma entidade, um osso dela ou um offset. Um alvo guarda as opcoes
-    que valem pra ele:
+    Varredura do que esta por perto, em dois ritmos (o desenho por frame fica no
+    client/render.lua):
+    - descoberta (DISCOVER_MS, ou na hora quando o registro muda): pools de
+      entidades e pontos num raio com folga, so os pools que tem opcao;
+    - atualizacao (REFRESH_MS): so sobre os candidatos da descoberta.
+    Cada alvo e um lugar onde o prompt pode abrir: um ponto, o centro de uma
+    entidade, um osso dela ou um offset. Um alvo guarda as opcoes que valem:
     - available: passaram grupo, item e canInteract (contam pro marcador);
     - reach: dessas, as que estao no alcance (abrem o prompt).
 ]]
@@ -15,7 +18,10 @@ local scan = {
     targets = {},
 }
 
-local SCAN_MS = 200
+local REFRESH_MS = 200
+local DISCOVER_MS = 1000
+-- Covers how far the player can move between two discoveries.
+local DISCOVER_SLACK = 6.0
 -- Veiculo e objeto grande: a origem fica longe da borda, entao busca um pouco alem.
 local SEARCH_MARGIN = 3.0
 -- Linha de visao: o raio parou ate essa distancia antes do alvo e ainda conta.
@@ -193,6 +199,18 @@ local function entityOptionLists(entity, kind)
     return lists
 end
 
+--- Pools that can hold targets: a type with global options, or any model/entity option.
+local function neededPools()
+    local any = next(registry.models) ~= nil or next(registry.entities) ~= nil or next(registry.localEntities) ~= nil
+    local globals = registry.globals
+    return {
+        vehicle = any or #globals.vehicle > 0,
+        ped = any or #globals.ped > 0,
+        object = any or #globals.object > 0,
+        player = any or #globals.player > 0,
+    }
+end
+
 local function collect(pos, radius)
     local list = {}
 
@@ -223,16 +241,18 @@ local function collect(pos, radius)
         end
     end
 
-    local vehicles, peds, objects, players = {}, {}, {}, {}
-    for _, v in ipairs(lib.getNearbyVehicles(pos, search, true)) do vehicles[#vehicles + 1] = v.vehicle end
-    for _, v in ipairs(lib.getNearbyPeds(pos, search)) do peds[#peds + 1] = v.ped end
-    for _, v in ipairs(lib.getNearbyObjects(pos, search)) do objects[#objects + 1] = v.object end
-    for _, v in ipairs(lib.getNearbyPlayers(pos, search, false)) do players[#players + 1] = v.ped end
+    -- The object pool is the big one: skipped when nothing targets objects.
+    local pools = neededPools()
+    local function entitiesOf(found, field)
+        local out = {}
+        for i = 1, #found do out[i] = found[i][field] end
+        return out
+    end
 
-    addAll(vehicles, 'vehicle')
-    addAll(peds, 'ped')
-    addAll(objects, 'object')
-    addAll(players, 'player')
+    if pools.vehicle then addAll(entitiesOf(lib.getNearbyVehicles(pos, search, true), 'vehicle'), 'vehicle') end
+    if pools.ped then addAll(entitiesOf(lib.getNearbyPeds(pos, search), 'ped'), 'ped') end
+    if pools.object then addAll(entitiesOf(lib.getNearbyObjects(pos, search), 'object'), 'object') end
+    if pools.player then addAll(entitiesOf(lib.getNearbyPlayers(pos, search, false), 'ped'), 'player') end
 
     return list
 end
@@ -248,6 +268,11 @@ local function inSight(target, anchor)
     return #(hitCoords - anchor) <= LOS_TOLERANCE
 end
 
+local candidates = {}
+local discoveredAt = 0
+local discoveredVersion = -1
+local forceDiscover = false
+
 --- Monta os alvos de agora. Fica vazio com o interact desligado ou escondido.
 ---@param hidden boolean
 local function build(hidden)
@@ -262,7 +287,13 @@ local function build(hidden)
 
     local radius = math.min(math.max(s.markerDistance, s.defaultDistance, registry.maxOptionDistance), MAX_SCAN_RADIUS)
 
-    for _, target in ipairs(collect(pos, radius)) do
+    local now = GetGameTimer()
+    if forceDiscover or registry.version ~= discoveredVersion or now - discoveredAt >= DISCOVER_MS then
+        candidates = collect(pos, radius + DISCOVER_SLACK)
+        discoveredAt, discoveredVersion, forceDiscover = now, registry.version, false
+    end
+
+    for _, target in ipairs(candidates) do
         local anchor = scan.anchorOf(target)
         if anchor then
             local distance = target.point and pointDistance(pos, target.point) or #(pos - anchor)
@@ -312,6 +343,7 @@ local wake = false
 
 --- Refaz agora em vez de esperar o proximo ciclo (tecla de mostrar apertada).
 function scan.refresh()
+    forceDiscover = true
     build(scan.isHidden())
     wake = true
 end
@@ -322,7 +354,7 @@ CreateThread(function()
 
         local waited = 0
         wake = false
-        while waited < SCAN_MS and not wake do
+        while waited < REFRESH_MS and not wake do
             Wait(50)
             waited = waited + 50
         end

@@ -290,6 +290,24 @@ inexistentes não aparecem.
 
 ---
 
+## Desempenho
+
+A varredura roda em três ritmos, pra pesar pouco no `resmon`:
+
+- **Descoberta (1 s):** acha veículos, peds, objetos, jogadores e pontos num
+  raio com folga de 6 m. Só varre o tipo que tem opção registrada: sem opção
+  de objeto, o pool de objetos nem é lido. Registrar ou remover opção refaz na
+  hora.
+- **Atualização (200 ms):** só sobre o que a descoberta achou: posição,
+  distância, `canInteract`, alcance e linha de visão.
+- **Desenho (por frame):** só enquanto há alvo, e só calcula a posição de quem
+  pode virar foco e dos primeiros marcadores.
+
+Nas portas dos veículos, o estado (válida, trancada, danificada, aberta) é lido
+uma vez por atualização e serve o abrir e o fechar.
+
+---
+
 ## Localização
 
 Textos em `locales/pt-br.json` e `locales/en.json`, pelo `ox_lib`

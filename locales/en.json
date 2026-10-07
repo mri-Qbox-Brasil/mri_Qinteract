@@ -3,6 +3,7 @@
   "hold": "Hold",
   "no_permission": "You are not allowed to open this panel.",
   "keybind_interact": "Interact with what you are aiming at",
+  "keybind_dismiss": "Hide the interaction until you step away and come back",
   "keybind_toggle": "Show or hide interactions",
   "toggle_front_driver_door": "Open/close driver door",
   "toggle_front_passenger_door": "Open/close passenger door",
@@ -10,6 +11,8 @@
   "toggle_rear_passenger_door": "Open/close rear right door",
   "toggle_hood": "Open/close hood",
   "toggle_trunk": "Open/close trunk",
+  "open": "Open",
+  "close": "Close",
   "interact_enabled": "Enabled (To Disable press BackSpace)",
   "interact_disabled": "Disabled (To Enable press BackSpace)"
 }

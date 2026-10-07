@@ -1,0 +1,37 @@
+{
+    "requireLookAt": true,
+    "useShowKey": true,
+    "indicator": {
+        "useAccent": true,
+        "pulse": true,
+        "opacity": 0.8,
+        "enabled": true,
+        "shape": "hand",
+        "size": 0.0085,
+        "color": "#FFFFFF"
+    },
+    "defaultDistance": 3,
+    "theme": "round",
+    "promptScale": 0.2,
+    "confirmSound": true,
+    "showKeyBehavior": "toggle",
+    "centerDot": {
+        "useAccent": true,
+        "enabled": true,
+        "opacity": 1,
+        "size": 0.002,
+        "shape": "hand",
+        "react": true,
+        "color": "#FFFFFF"
+    },
+    "markerDistance": 5,
+    "accentColor": "",
+    "interactKey": "E",
+    "compactIdleMs": 2500,
+    "lookRadius": 0.1,
+    "compact": false,
+    "requireLos": false,
+    "showKey": "BACK",
+    "maxIndicators": 2,
+    "showIcons": true
+}

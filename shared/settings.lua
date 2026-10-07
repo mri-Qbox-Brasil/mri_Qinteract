@@ -29,8 +29,8 @@ settings.defaults = {
     compact = false,
     compactIdleMs = 2500,
     interactKey = 'E', -- padrao do keybind; so vale no restart e pra quem nunca trocou
-    useShowKey = false,
-    showKey = 'LMENU',
+    useShowKey = true,
+    showKey = 'BACK',
     showKeyBehavior = 'toggle',
     confirmSound = false, -- som curto do GTA ao escolher uma opcao
 

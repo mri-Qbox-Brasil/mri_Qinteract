@@ -9,5 +9,7 @@
   "toggle_rear_driver_door": "Open/close rear left door",
   "toggle_rear_passenger_door": "Open/close rear right door",
   "toggle_hood": "Open/close hood",
-  "toggle_trunk": "Open/close trunk"
+  "toggle_trunk": "Open/close trunk",
+  "interact_enabled": "Enabled (To Disable press BackSpace)",
+  "interact_disabled": "Disabled (To Enable press BackSpace)"
 }

@@ -17,7 +17,7 @@ local input = {
 }
 
 local showHeld = false
-local toggledShown = false
+local toggledShown = true
 
 local function hidden()
     local s = state.settings
@@ -43,7 +43,22 @@ lib.addKeybind({
     onPressed = function()
         if not state.settings.useShowKey then return end
         showHeld = true
-        if state.settings.showKeyBehavior == 'toggle' then toggledShown = not toggledShown end
+        if state.settings.showKeyBehavior == 'toggle' then
+            toggledShown = not toggledShown
+            if toggledShown then
+                lib.notify({
+                    title = locale('interact'),
+                    description = locale('interact_enabled'),
+                    type = 'success'
+                })
+            else
+                lib.notify({
+                    title = locale('interact'),
+                    description = locale('interact_disabled'),
+                    type = 'warning'
+                })
+            end
+        end
         -- Na hora, sem esperar o proximo ciclo do scan.
         scan.refresh()
     end,

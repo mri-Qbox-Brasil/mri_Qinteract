@@ -9,5 +9,7 @@
   "toggle_rear_driver_door": "Abrir/fechar porta traseira esquerda",
   "toggle_rear_passenger_door": "Abrir/fechar porta traseira direita",
   "toggle_hood": "Abrir/fechar capô",
-  "toggle_trunk": "Abrir/fechar porta-malas"
+  "toggle_trunk": "Abrir/fechar porta-malas",
+  "interact_enabled": "Ativado (Para Desativar utilize BackSpace)",
+  "interact_disabled": "Desativado (Para Ativar utilize BackSpace)"
 }

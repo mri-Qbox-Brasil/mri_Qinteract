@@ -1,17 +1,21 @@
 --[[
     Opcoes padrao em todo veiculo: abrir e fechar portas, capo e porta-malas,
-    cada uma no osso dela. So com o veiculo destrancado e a porta inteira.
+    portas no osso delas; capo e porta-malas na ponta da frente e de tras da
+    caixa do modelo (o osso deles e a dobradica). So com o veiculo destrancado
+    e a porta inteira.
+    Abrir e fechar sao opcoes separadas: o prompt mostra so a que vale agora.
+    Texto so com o verbo (a posicao ja diz a peca) e o icone mostra a peca.
 ]]
 
 local registry = require 'client.registry'
 
 local DOORS = {
-    { bone = 'door_dside_f', index = 0, label = 'toggle_front_driver_door' },
-    { bone = 'door_pside_f', index = 1, label = 'toggle_front_passenger_door' },
-    { bone = 'door_dside_r', index = 2, label = 'toggle_rear_driver_door' },
-    { bone = 'door_pside_r', index = 3, label = 'toggle_rear_passenger_door' },
-    { bone = 'bonnet', index = 4, label = 'toggle_hood' },
-    { bone = 'boot', index = 5, label = 'toggle_trunk' },
+    { bone = 'door_dside_f', index = 0, name = 'front_driver_door', icon = 'fa-solid fa-car-side' },
+    { bone = 'door_pside_f', index = 1, name = 'front_passenger_door', icon = 'fa-solid fa-car-side' },
+    { bone = 'door_dside_r', index = 2, name = 'rear_driver_door', icon = 'fa-solid fa-car-side' },
+    { bone = 'door_pside_r', index = 3, name = 'rear_passenger_door', icon = 'fa-solid fa-car-side' },
+    { offset = vec3(0.5, 1.0, 0.5), index = 4, name = 'hood', icon = 'fa-solid fa-car', distance = 2.0 },
+    { offset = vec3(0.5, 0.0, 0.5), index = 5, name = 'trunk', icon = 'fa-solid fa-car-rear', distance = 2.0 },
 }
 
 -- Trancado (2) e os outros estados de tranca (4 em diante) bloqueiam.
@@ -20,36 +24,65 @@ local function unlocked(vehicle)
     return status == 0 or status == 1
 end
 
-local function toggleDoor(vehicle, index)
+local function isOpen(vehicle, index)
+    return GetVehicleDoorAngleRatio(vehicle, index) > 0.0
+end
+
+local function setDoor(vehicle, index, open)
     if not NetworkHasControlOfEntity(vehicle) then
         NetworkRequestControlOfEntity(vehicle)
         local timeout = GetGameTimer() + 500
         while not NetworkHasControlOfEntity(vehicle) and GetGameTimer() < timeout do Wait(0) end
     end
 
-    if GetVehicleDoorAngleRatio(vehicle, index) > 0.0 then
-        SetVehicleDoorShut(vehicle, index, false)
-    else
+    if open then
         SetVehicleDoorOpen(vehicle, index, false, false)
+    else
+        SetVehicleDoorShut(vehicle, index, false)
     end
+end
+
+local function usable(vehicle, index)
+    return unlocked(vehicle) and not IsVehicleDoorDamaged(vehicle, index) and GetIsDoorValid(vehicle, index)
+end
+
+-- Door state read once per scan refresh, shared by its open and close options.
+local doorCache, doorCacheAt = {}, 0
+
+local function doorState(vehicle, index)
+    local now = GetGameTimer()
+    if now - doorCacheAt > 50 then doorCache, doorCacheAt = {}, now end
+
+    local key = vehicle * 8 + index
+    local door = doorCache[key]
+    if not door then
+        local ok = usable(vehicle, index)
+        door = { usable = ok, open = ok and isOpen(vehicle, index) }
+        doorCache[key] = door
+    end
+    return door
 end
 
 local options = {}
 for _, door in ipairs(DOORS) do
-    options[#options + 1] = {
-        name = 'mri_' .. door.label,
-        label = locale(door.label),
-        icon = 'fa-solid fa-car',
-        bones = { door.bone },
-        distance = 1.5,
-        canInteract = function(vehicle)
-            return unlocked(vehicle) and not IsVehicleDoorDamaged(vehicle, door.index)
-                and GetIsDoorValid(vehicle, door.index)
-        end,
-        onSelect = function(data)
-            toggleDoor(data.entity, door.index)
-        end,
-    }
+    for _, open in ipairs({ true, false }) do
+        local action = open and 'open' or 'close'
+        options[#options + 1] = {
+            name = ('mri_%s_%s'):format(action, door.name),
+            label = locale(action),
+            icon = door.icon,
+            bones = door.bone and { door.bone },
+            offset = door.offset,
+            distance = door.distance or 1.5,
+            canInteract = function(vehicle)
+                local current = doorState(vehicle, door.index)
+                return current.usable and current.open ~= open
+            end,
+            onSelect = function(data)
+                setDoor(data.entity, door.index, open)
+            end,
+        }
+    end
 end
 
 registry.addGlobal('vehicle', options, cache.resource)

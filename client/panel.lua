@@ -15,8 +15,9 @@ local function duiConfig()
     return {
         accentColor = state.accent,
         holdLabel = locale('hold'),
-        theme = s.theme,
+        theme = state.theme,
         showIcons = s.showIcons,
+        promptScale = s.promptScale,
         menu = { compact = s.compact, idleMs = s.compactIdleMs },
     }
 end
@@ -48,11 +49,14 @@ end)
 
 RegisterNetEvent('ox_lib:uiConfigChanged', function(newConfig)
     if type(newConfig) ~= 'table' then return end
+    state.setSuiteTheme(newConfig.theme)
     dui.send('applyUiConfig', newConfig)
     SendNUIMessage({ action = 'applyUiConfig', uiConfig = newConfig })
 end)
 
 CreateThread(function()
+    local uiConfig = lib.callback.await('ox_lib:getUiConfig', false)
+    if type(uiConfig) == 'table' then state.setSuiteTheme(uiConfig.theme) end
     state.setSettings(lib.callback.await('mri_Qinteract:getSettings', false))
 end)
 

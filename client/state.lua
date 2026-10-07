@@ -9,6 +9,8 @@ local settings = require 'shared.settings'
 local state = {
     settings = settings.merge(nil),
     suiteAccent = GetConvar('mri:color', '#00E699'),
+    -- Tema do /uiconfig (client/panel.lua); decide o tema 'suite' do prompt.
+    suiteTheme = 'glass',
     -- disableTargeting / exports: some com tudo enquanto true.
     disabled = false,
     -- Tem prompt aberto num alvo agora (client/render.lua).
@@ -22,7 +24,10 @@ local loadedShapes = {}
 
 local function ensureShape(shape)
     if loadedShapes[shape] then return end
-    CreateRuntimeTextureFromImage(CreateRuntimeTxd(settings.markerDict(shape)), 'marker', settings.markerFile(shape))
+    local txd = CreateRuntimeTxd(settings.markerDict(shape))
+    for i, px in ipairs(settings.markerLevels) do
+        CreateRuntimeTextureFromImage(txd, settings.markerTextures[i], settings.markerFile(shape, px))
+    end
     loadedShapes[shape] = true
 end
 
@@ -30,7 +35,6 @@ local function markerSprite(marker, accent)
     return {
         enabled = marker.enabled,
         dict = settings.markerDict(marker.shape),
-        txt = 'marker',
         twist = settings.markerTwist[marker.shape] == true,
         color = settings.toRgba(marker.useAccent and accent or marker.color, marker.opacity),
         size = marker.size,
@@ -46,6 +50,7 @@ local function resolve()
     if s.centerDot.enabled then ensureShape(s.centerDot.shape) end
 
     state.accent = accent
+    state.theme = settings.resolveTheme(s, state.suiteTheme)
     state.indicator = markerSprite(s.indicator, accent)
     state.indicator.pulse = s.indicator.pulse
     state.centerDot = markerSprite(s.centerDot, accent)
@@ -70,24 +75,21 @@ function state.setSuiteAccent(color)
     for i = 1, #listeners do listeners[i](state.settings, state.settings) end
 end
 
+---@param theme string? tema do /uiconfig
+function state.setSuiteTheme(theme)
+    if type(theme) ~= 'string' or theme == state.suiteTheme then return end
+    state.suiteTheme = theme
+    resolve()
+
+    for i = 1, #listeners do listeners[i](state.settings, state.settings) end
+end
+
 ---@param fn fun(current: table, previous: table)
 function state.onChange(fn)
     listeners[#listeners + 1] = fn
 end
 
--- Boot: o arquivo distribuido com o resource. O valor atual do server chega
--- pelo client/panel.lua logo depois.
-do
-    local raw = LoadResourceFile(cache.resource, 'data/config.json')
-    local saved
-
-    if raw and raw ~= '' then
-        local ok, decoded = pcall(json.decode, raw)
-        if ok then saved = decoded else lib.print.warn('data/config.json invalido, usando os padroes') end
-    end
-
-    state.settings = settings.merge(saved)
-    resolve()
-end
+-- Boot: the defaults; the saved config comes from the server (client/panel.lua).
+resolve()
 
 return state

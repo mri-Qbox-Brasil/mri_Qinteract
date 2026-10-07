@@ -4,12 +4,17 @@
     de pixels pra ficar nitida.
 
     Mensagens pra pagina: { action, value } (web/src/dui/DuiApp.tsx).
+
+    Tema liquid: o prompt vai pra ui_page (overlay por cima da tela, com o jogo
+    desfocado atras pelo startGameGlass), posicionado no alvo a cada frame.
+    As mensagens levam target = 'prompt' (a pagina e dividida com o painel).
 ]]
 
 local state = require 'client.state'
 
 local dui = {
     ready = false,
+    overlayReady = false,
     -- Centro da tecla dentro da textura (0 a 1); a pagina manda o real em promptAnchor.
     anchorX = 0.07,
     anchorY = 0.5,
@@ -21,8 +26,22 @@ local ASPECT = 2.4
 local SUPERSAMPLE = 2
 local MAX_EDGE = 2048
 
+local OVERLAY_THEME = 'liquid'
+
 local txd
 local generation = 0
+
+--- Tema desenhado no overlay da ui_page em vez da textura no mundo.
+---@return boolean
+function dui.isOverlay()
+    return state.theme == OVERLAY_THEME
+end
+
+--- A superficie atual ja carregou.
+function dui.isReady()
+    if dui.isOverlay() then return dui.overlayReady end
+    return dui.ready
+end
 
 local function size()
     local _, screenH = GetActiveScreenResolution()
@@ -51,19 +70,43 @@ function dui.create()
     CreateRuntimeTextureFromDuiHandle(txd, dui.txt, GetDuiHandle(dui.object))
 end
 
+--- Manda pra uma superficie especifica (troca de tema com prompt aberto).
+---@param overlay boolean
+---@param action string
+---@param value any
+function dui.sendTo(overlay, action, value)
+    if overlay then
+        if dui.overlayReady then SendNUIMessage({ target = 'prompt', action = action, value = value }) end
+        return
+    end
+    if not dui.ready then return end
+    SendDuiMessage(dui.object, json.encode({ action = action, value = value }))
+end
+
 ---@param action string
 ---@param value any
 function dui.send(action, value)
-    if not dui.ready then return end
-    SendDuiMessage(dui.object, json.encode({ action = action, value = value }))
+    dui.sendTo(dui.isOverlay(), action, value)
 end
 
 --- Roda e setas viram scroll da lista (a pagina troca a opcao).
 ---@param down boolean
 function dui.scroll(down)
+    if dui.isOverlay() then return dui.send('scroll', down) end
     if not dui.ready then return end
     SendDuiMouseMove(dui.object, dui.width // 2, dui.height // 2)
     SendDuiMouseWheel(dui.object, down and -120 or 120, 0)
+end
+
+local placed = { x = -1, y = -1, on = false }
+
+--- Overlay: posicao do alvo na tela pra pagina, so quando muda.
+---@param coords vector3
+function dui.place(coords)
+    local on, x, y = GetScreenCoordFromWorldCoord(coords.x, coords.y, coords.z)
+    if on == placed.on and math.abs(x - placed.x) < 0.0002 and math.abs(y - placed.y) < 0.0002 then return end
+    placed.on, placed.x, placed.y = on, x, y
+    SendNuiMessage(('{"target":"prompt","action":"position","value":{"x":%.5f,"y":%.5f,"on":%s}}'):format(x, y, on and 'true' or 'false'))
 end
 
 local readyListeners = {}
@@ -73,10 +116,22 @@ function dui.onReady(fn)
     readyListeners[#readyListeners + 1] = fn
 end
 
+local function notifyReady(overlay)
+    if overlay ~= dui.isOverlay() then return end
+    for i = 1, #readyListeners do readyListeners[i]() end
+end
+
 RegisterNUICallback('load', function(_, cb)
     dui.ready = true
     cb(1)
-    for i = 1, #readyListeners do readyListeners[i]() end
+    notifyReady(false)
+end)
+
+RegisterNUICallback('overlayLoad', function(_, cb)
+    dui.overlayReady = true
+    placed.x = -1
+    cb(1)
+    notifyReady(true)
 end)
 
 RegisterNUICallback('promptAnchor', function(data, cb)

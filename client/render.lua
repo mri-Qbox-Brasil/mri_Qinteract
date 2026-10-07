@@ -14,6 +14,7 @@ local markers = require 'client.markers'
 local options = require 'client.options'
 local scan = require 'client.scan'
 local state = require 'client.state'
+local settings = require 'shared.settings'
 
 -- Depois de confirmar, a tecla espera isso antes de aceitar outra (o loader na pagina).
 local COOLDOWN_MS = 750
@@ -26,11 +27,25 @@ local REACT_GROW = 0.45
 local PROMPT_ASPECT = 2.4
 -- Any focused NUI (inventory, phone, menus) hides the world layer.
 local NO_TARGETS = {}
+-- Keeps hiding a bit after the action ends, so it doesn't flicker between shots or sprints.
+local ACTION_GRACE_MS = 400
+
+-- Screen width in px this frame, to pick the marker texture level.
+local screenWidth = 1920
 
 local focus -- { key, target, options = { ... } }
 local lastAnchor
 local hideUntil = 0
 local cooldownUntil = 0
+-- Recolher quando parado: desde quando o prompt esta parado e se ja recolheu.
+local shownAt = 0
+local dormant = false
+local pressing = false
+local actionUntil = 0
+-- Targets hidden by the dismiss key until they leave interaction reach.
+local dismissed = {}
+-- Only claim the E controls when the player's interact key is E (set on each new focus).
+local keyIsE = false
 
 local indicatorFades = {}
 local dotFade = markers.new()
@@ -97,6 +112,7 @@ local function setFocus(target)
             dui.send('visible', false)
             options.endHold()
             hideUntil = GetGameTimer() + HIDE_MS
+            dormant = false
             focus = nil
             state.focused = false
         end
@@ -118,7 +134,13 @@ local function setFocus(target)
     active = nil
     focus = { key = target.key, target = target, options = target.reach, index = 1 }
     state.focused = true
-    dui.send('setKey', input.keyLabel())
+    shownAt = GetGameTimer()
+    -- The page may still be dormant from the last target (it fades out as is).
+    dormant = false
+    dui.send('dormant', false)
+    local keyLabel = input.keyLabel()
+    keyIsE = keyLabel == 'E'
+    dui.send('setKey', keyLabel)
     dui.send('setOptions', { options = payload(focus.options), resetIndex = true })
     dui.send('visible', true)
     updateActive()
@@ -132,7 +154,7 @@ local function screenDistanceSq(coords, aspect)
     return dx * dx + dy * dy
 end
 
---- Melhor alvo agora e as posicoes de todos (pra nao recalcular no desenho).
+--- Melhor alvo agora e as posicoes de quem aparece (pra nao recalcular no desenho).
 local function pickFocus(targets, aspect)
     local s = state.settings
     local radiusSq = s.lookRadius * s.lookRadius
@@ -141,10 +163,11 @@ local function pickFocus(targets, aspect)
 
     for i = 1, #targets do
         local target = targets[i]
-        local anchor = scan.anchorOf(target)
+        -- Only focus candidates and the first markers need a position this frame.
+        local anchor = (#target.reach > 0 or i <= s.maxIndicators + 1) and scan.anchorOf(target) or nil
         anchors[target.key] = anchor
 
-        if anchor and #target.reach > 0 then
+        if anchor and #target.reach > 0 and not dismissed[target.key] then
             local sq = screenDistanceSq(anchor, aspect)
             if sq and (not s.requireLookAt or sq <= radiusSq) and (not bestSq or sq < bestSq) then
                 best, bestSq = target, sq
@@ -156,6 +179,8 @@ local function pickFocus(targets, aspect)
 end
 
 local function drawPrompt(anchor, aspect)
+    if dui.isOverlay() then return dui.place(anchor) end
+
     local height = state.settings.promptScale
     local width = height * PROMPT_ASPECT / aspect
 
@@ -167,7 +192,7 @@ end
 
 local function drawMarker(sprite, coords, size, rotation, r, g, b, a, aspect)
     SetDrawOrigin(coords.x, coords.y, coords.z, 0)
-    DrawSprite(sprite.dict, sprite.txt, 0.0, 0.0, size, size * aspect, rotation, r, g, b, a)
+    DrawSprite(sprite.dict, settings.markerTexture(size * screenWidth), 0.0, 0.0, size, size * aspect, rotation, r, g, b, a)
     ClearDrawOrigin()
 end
 
@@ -181,7 +206,7 @@ local function drawIndicators(targets, anchors, now, aspect)
         for i = 1, #targets do
             if count >= s.maxIndicators then break end
             local target = targets[i]
-            if not focus or focus.key ~= target.key then
+            if (not focus or focus.key ~= target.key) and not dismissed[target.key] then
                 local anchor = anchors[target.key]
                 if anchor then
                     count = count + 1
@@ -241,8 +266,18 @@ local function drawCenterDot(inRange, now, aspect)
     end
 
     local size = dot.size * pop * (1.0 + REACT_GROW * react)
-    DrawSprite(dot.dict, dot.txt, 0.5, 0.5, size, size * aspect, dot.twist and twist or 0.0, r, g, b,
+    DrawSprite(dot.dict, settings.markerTexture(size * screenWidth), 0.5, 0.5, size, size * aspect, dot.twist and twist or 0.0, r, g, b,
         math.floor(color[4] * alpha + 0.5))
+end
+
+-- Default E controls (pickup, talk, context; horn in a vehicle): with a prompt open, other scripts can't take the same press.
+local KEY_CONTROLS = { 38, 46, 51 }
+local VEHICLE_KEY_CONTROL = 86
+
+local function claimKey()
+    if not keyIsE then return end
+    for i = 1, #KEY_CONTROLS do DisableControlAction(0, KEY_CONTROLS[i], true) end
+    if cache.vehicle then DisableControlAction(0, VEHICLE_KEY_CONTROL, true) end
 end
 
 -- Roda do mouse e setas trocam a opcao (sem trocar de arma).
@@ -261,12 +296,57 @@ local function handleScroll()
     end
 end
 
+local function setDormant(value)
+    dormant = value
+    shownAt = GetGameTimer()
+    dui.send('dormant', value)
+end
+
+--- Jogador fazendo outra coisa (painel: actionHide): some com tudo do mundo.
+local function inAction(now)
+    local hide = state.settings.actionHide
+    local ped = cache.ped
+    local busy = (hide.aiming and IsPlayerFreeAiming(cache.playerId))
+        or (hide.combat and (IsPedInMeleeCombat(ped) or IsPedShooting(ped)))
+        or (hide.sprinting and IsPedSprinting(ped))
+        or (hide.vehicle and cache.vehicle and GetEntitySpeed(cache.vehicle) * 3.6 > hide.vehicleSpeed)
+
+    if busy then actionUntil = now + ACTION_GRACE_MS end
+    return now < actionUntil
+end
+
 input.onPress = function()
-    if not focus or GetGameTimer() < cooldownUntil then return end
+    if not focus then return end
+    -- Recolhido: a tecla so traz o prompt de volta, sem confirmar nada.
+    if dormant then return setDormant(false) end
+    if GetGameTimer() < cooldownUntil then return end
+    pressing = true
     dui.send('interact')
 end
 
+input.onDismiss = function()
+    if not focus then return end
+    dismissed[focus.key] = true
+    -- Sem foco nao chega o release: a tecla de interagir nao fica presa.
+    pressing = false
+end
+
+--- Libera quem saiu do alcance (sem opcao em reach) ou sumiu do scan.
+local function releaseDismissed()
+    if not next(dismissed) then return end
+    local inReach = {}
+    local targets = scan.targets
+    for i = 1, #targets do
+        if #targets[i].reach > 0 then inReach[targets[i].key] = true end
+    end
+    for key in pairs(dismissed) do
+        if not inReach[key] then dismissed[key] = nil end
+    end
+end
+
 input.onRelease = function()
+    pressing = false
+    shownAt = GetGameTimer()
     dui.send('release')
 end
 
@@ -313,14 +393,16 @@ RegisterNUICallback('currentOption', function(data, cb)
     local index = type(data) == 'table' and tonumber(data[1])
     if focus and index then
         focus.index = index
+        shownAt = GetGameTimer()
         updateActive()
     end
 end)
 
 CreateThread(function()
     while true do
-        local targets = IsNuiFocused() and NO_TARGETS or scan.targets
         local now = GetGameTimer()
+        local targets = (IsNuiFocused() or IsPauseMenuActive() or inAction(now)) and NO_TARGETS or scan.targets
+        releaseDismissed()
         local busy = #targets > 0 or focus or now < hideUntil or next(indicatorFades) or dotFade.value > 0.01
 
         if not busy then
@@ -329,6 +411,7 @@ CreateThread(function()
             Wait(0)
             now = GetGameTimer()
             local aspect = GetAspectRatio(true)
+            screenWidth = GetActiveScreenResolution()
             local best, anchors = pickFocus(targets, aspect)
             setFocus(best)
 
@@ -339,12 +422,22 @@ CreateThread(function()
 
             drawIndicators(targets, anchors, now, aspect)
 
+            local s = state.settings
+            if focus and not pressing then
+                if dormant and not s.dormant then
+                    setDormant(false)
+                elseif not dormant and s.dormant and now - shownAt >= s.dormantMs then
+                    setDormant(true)
+                end
+            end
+
             if focus then
                 lastAnchor = anchors[focus.key] or lastAnchor
-                if lastAnchor and dui.ready then drawPrompt(lastAnchor, aspect) end
-                if #focus.options > 1 then handleScroll() end
+                if lastAnchor and dui.isReady() then drawPrompt(lastAnchor, aspect) end
+                claimKey()
+                if not dormant and #focus.options > 1 then handleScroll() end
                 if active and active.whileActive then callHook(active, 'whileActive') end
-            elseif now < hideUntil and lastAnchor and dui.ready then
+            elseif now < hideUntil and lastAnchor and dui.isReady() then
                 drawPrompt(lastAnchor, aspect)
             end
 
@@ -353,12 +446,25 @@ CreateThread(function()
     end
 end)
 
--- Pagina (re)carregada: texto do resumo compacto; o foco aberto volta a aparecer.
-dui.onReady(function()
+--- Prompt aberto de novo na superficie atual (pagina recarregada ou troca de tema).
+local function resendFocus()
     dui.send('setLabel', locale('interact'))
-    if focus then
-        dui.send('setKey', input.keyLabel())
-        dui.send('setOptions', { options = payload(focus.options), resetIndex = true })
-        dui.send('visible', true)
-    end
+    if not focus then return end
+    dui.send('setKey', input.keyLabel())
+    dui.send('setOptions', { options = payload(focus.options), resetIndex = true })
+    dui.send('dormant', dormant)
+    dui.send('visible', true)
+end
+
+dui.onReady(resendFocus)
+
+-- Tema liquid fica no overlay e os outros na DUI: trocar com prompt aberto muda de superficie.
+local overlayMode = dui.isOverlay()
+
+state.onChange(function()
+    local was = overlayMode
+    overlayMode = dui.isOverlay()
+    if was == overlayMode then return end
+    dui.sendTo(was, 'visible', false)
+    resendFocus()
 end)

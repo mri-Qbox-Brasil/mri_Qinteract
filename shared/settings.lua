@@ -6,9 +6,11 @@
 
 local settings = {}
 
-settings.themes = { block = true, glass = true, outline = true, round = true }
+-- liquid: desenhado no overlay da ui_page, com o jogo desfocado atras (client/dui.lua).
+-- suite: liquid when the /uiconfig theme is liquid, block otherwise (settings.resolveTheme).
+settings.themes = { suite = true, block = true, glass = true, outline = true, round = true, liquid = true }
 
--- Formas dos marcadores: web/markers/<shape>.png (geradas de web/src/markers/shapes.ts).
+-- Formas dos marcadores: markers/<shape>_<px>.png (geradas de web/src/markers/shapes.ts).
 settings.markerShapes = {
     target = true, dot = true, ring = true, diamond = true, rhombus = true, square = true,
     eye = true, hand = true, arrow = true, crosshair = true,
@@ -20,7 +22,7 @@ settings.markerTwist = { diamond = true, rhombus = true, square = true, crosshai
 
 settings.defaults = {
     -- Visual do prompt
-    theme = 'block',
+    theme = 'suite',
     accentColor = '#FFFFFF', -- vazio segue a convar mri:color
     showIcons = true,
     promptScale = 0.2, -- fracao da altura da tela ocupada pela textura do prompt
@@ -28,10 +30,18 @@ settings.defaults = {
     -- Comportamento
     compact = false,
     compactIdleMs = 2500,
+    -- Prompt parado no mesmo alvo recolhe pra so a tecla, apagada; volta ao mirar de novo ou apertar a tecla.
+    dormant = false,
+    dormantMs = 5000,
+    -- Some com prompt e marcadores enquanto o jogador faz outra coisa (vehicleSpeed em km/h).
+    actionHide = { aiming = true, combat = true, sprinting = true, vehicle = true, vehicleSpeed = 30 },
     interactKey = 'E', -- padrao do keybind; so vale no restart e pra quem nunca trocou
     useShowKey = false,
     showKey = 'LMENU',
     showKeyBehavior = 'toggle',
+    -- Tecla que esconde a interacao do alvo em foco ate o jogador sair do alcance e voltar.
+    dismiss = true,
+    dismissKey = 'BACK',
     confirmSound = false, -- som curto do GTA ao escolher uma opcao
 
     -- Alcance e mira
@@ -55,6 +65,8 @@ settings.defaults = {
 local ranges = {
     promptScale = { 0.1, 0.35 },
     compactIdleMs = { 500, 10000 },
+    dormantMs = { 1000, 30000 },
+    ['actionHide.vehicleSpeed'] = { 0, 200 },
     markerDistance = { 1.0, 15.0 },
     defaultDistance = { 1.0, 15.0 },
     maxIndicators = { 0, 20 },
@@ -90,7 +102,7 @@ local function sanitize(path, default, value)
         if path == 'theme' then return settings.themes[value] and value or default end
         if path == 'accentColor' then return (value == '' or isHex(value)) and value:upper() or default end
         if path == 'showKeyBehavior' then return (value == 'toggle' or value == 'hold') and value or default end
-        if path == 'interactKey' or path == 'showKey' then return isKey(value) and value:upper() or default end
+        if path == 'interactKey' or path == 'showKey' or path == 'dismissKey' then return isKey(value) and value:upper() or default end
         if path:find('%.color$') then return isHex(value) and value:upper() or default end
         if path:find('%.shape$') then return settings.markerShapes[value] and value or default end
         return value
@@ -132,13 +144,39 @@ function settings.accent(s, suiteAccent)
     return isHex(suiteAccent) and suiteAccent:upper() or '#00E699'
 end
 
+--- Prompt theme actually drawn: 'suite' follows the /uiconfig theme.
+---@param s table settings ja passados pelo merge
+---@param suiteTheme string? tema do /uiconfig (dark, glass, liquid)
+---@return string
+function settings.resolveTheme(s, suiteTheme)
+    if s.theme ~= 'suite' then return s.theme end
+    return suiteTheme == 'liquid' and 'liquid' or 'block'
+end
+
 --- Cada forma e um txd de runtime proprio, criado sob demanda (client/markers.lua).
 function settings.markerDict(shape)
     return 'mri_marker_' .. shape
 end
 
-function settings.markerFile(shape)
-    return ('web/markers/%s.png'):format(shape)
+-- Pre-rendered sizes in px (web/scripts/markers.mjs): runtime textures have no mipmaps.
+settings.markerLevels = { 8, 12, 16, 24, 32, 48, 64, 96, 128 }
+
+settings.markerTextures = {}
+for i, px in ipairs(settings.markerLevels) do settings.markerTextures[i] = ('marker_%d'):format(px) end
+
+function settings.markerFile(shape, px)
+    return ('markers/%s_%d.png'):format(shape, px)
+end
+
+--- Texture of the smallest level that covers px on screen.
+---@param px number
+---@return string
+function settings.markerTexture(px)
+    local levels = settings.markerLevels
+    for i = 1, #levels do
+        if levels[i] >= px then return settings.markerTextures[i] end
+    end
+    return settings.markerTextures[#levels]
 end
 
 ---@param hex string #RRGGBB

@@ -5,7 +5,7 @@ game 'gta5'
 
 name 'mri_Qinteract'
 author 'MRI Qbox Brasil'
-version '1.2.1'
+version '1.2.2'
 description 'AAA-Grade Interaction Experience for FiveM'
 
 ox_lib 'locale'

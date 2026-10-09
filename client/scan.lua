@@ -31,6 +31,9 @@ local LOS_MAX_TARGETS = 8
 -- Caps the scan when some resource registers a huge option distance.
 local MAX_SCAN_RADIUS = 15.0
 
+-- SKEL_Spine3
+local PED_CHEST_BONE = 24818
+
 -- Caixa do modelo (min, max), em offset da origem (cache por modelo).
 local modelBoxes = {}
 
@@ -59,7 +62,8 @@ function scan.anchorOf(target)
     local entity = target.entity
     if not DoesEntityExist(entity) then return nil end
 
-    if target.bone then return GetWorldPositionOfEntityBone(entity, target.bone) end
+    local bone = target.bone or target.anchorBone
+    if bone then return GetWorldPositionOfEntityBone(entity, bone) end
     if target.offsetKind == 'world' then return GetEntityCoords(entity) + target.offset end
 
     local offset = target.offset
@@ -167,7 +171,8 @@ local function addEntityTargets(list, entity, optionLists)
                 byKey[key] = byKey[key] or { entity = entity, offset = offset, offsetKind = kind, options = {} }
                 table.insert(byKey[key].options, option)
             else
-                byKey.c = byKey.c or { entity = entity, options = {} }
+                -- the model box center of a ped is the crotch: peds anchor at the chest
+                byKey.c = byKey.c or { entity = entity, anchorBone = GetEntityType(entity) == 1 and GetPedBoneIndex(entity, PED_CHEST_BONE) or nil, options = {} }
                 table.insert(byKey.c.options, option)
             end
         end

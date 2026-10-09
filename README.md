@@ -69,7 +69,8 @@ add_ace group.admin mri_Qinteract.admin allow
 - **Alvos.** A cada 200ms o client procura o que está por perto: pontos e
   zonas registrados, e veículos, peds, objetos e jogadores que tenham opções
   (pela entidade, pelo modelo ou globais). Opções com `bones` viram um alvo no
-  osso; com `offset`, um alvo no offset; o resto fica no centro do modelo.
+  osso; com `offset`, um alvo no offset; o resto fica no centro do modelo
+  (ped e jogador, no peito).
 - **Marcador distante.** Alvos dentro da distância do marcador com alguma
   opção liberada (grupo, item e `canInteract`) mostram um marcador. Alvo mais
   longe que isso aparece só quando já está no alcance de alguma opção.

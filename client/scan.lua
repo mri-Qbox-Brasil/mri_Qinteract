@@ -165,8 +165,10 @@ local function addEntityTargets(list, entity, optionLists)
                         table.insert(byKey[key].options, option)
                     end
                 end
-            elseif offsetOf(option) then
-                local kind, offset = offsetOf(option)
+            elseif option.anchor or offsetOf(option) then
+                -- anchor(entity): offset in meters worked out per model (client/vehicle.lua).
+                local kind, offset
+                if option.anchor then kind, offset = 'local', option.anchor(entity) else kind, offset = offsetOf(option) end
                 local key = ('o%s%.3f,%.3f,%.3f'):format(kind, offset.x, offset.y, offset.z)
                 byKey[key] = byKey[key] or { entity = entity, offset = offset, offsetKind = kind, options = {} }
                 table.insert(byKey[key].options, option)

@@ -51,6 +51,18 @@ qb-target, qtarget ou sleepless_interact passam a funcionar por aproximação se
 4. Se usar o `ox_compat` com o módulo de qb-target ligado, desligue esse
    módulo: o mri_Qinteract já responde pelo qb-target.
 
+### Reiniciar o mri_Qinteract
+
+Um `ensure mri_Qinteract` mantém as interações que os outros resources já
+registraram: cada uma só sai quando o resource dono dela para. Duas exceções:
+
+- Resource que declara `dependency` no `ox_target`, `qb-target`, `qtarget` ou
+  `sleepless_interact` é parado pelo FiveM junto com o mri_Qinteract e não
+  volta sozinho. Como o mri_Qinteract sobe antes deles no `server.cfg`, a
+  linha pode sair do `fxmanifest.lua` deles.
+- Os peds do `SpawnPed` (qb-target) são criados pelo mri_Qinteract e somem com
+  ele.
+
 ---
 
 ## Permissões (ACE)

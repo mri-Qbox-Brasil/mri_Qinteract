@@ -6,12 +6,16 @@
 local registry = require 'client.registry'
 local state = require 'client.state'
 local exportAs = require 'client.compat.export'
+local persist = require 'client.persist'
 
 local function handler(name, fn) exportAs('ox_target', name, fn) end
 
 -- Nome da zona -> id, e o inverso pra limpar quando removem pelo id.
-local zoneNames = {}
-local idNames = {}
+local savedZones = persist.take('ox_target') or {}
+local zoneNames = savedZones.zoneNames or {}
+local idNames = savedZones.idNames or {}
+
+persist.onStop(function() persist.save('ox_target', { zoneNames = zoneNames, idNames = idNames }) end)
 
 local function track(id, name)
     if name then

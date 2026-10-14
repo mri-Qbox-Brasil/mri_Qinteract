@@ -302,11 +302,20 @@ local function setDormant(value)
     dui.send('dormant', value)
 end
 
+-- Tools held like a weapon that other scripts use through the target (jerry can refuel).
+local NOT_ARMED = { [`GROUP_PETROLCAN`] = true, [`GROUP_FIREEXTINGUISHER`] = true, [`GROUP_PARACHUTE`] = true }
+
+local function isArmed()
+    local weapon = cache.weapon
+    return weapon and not NOT_ARMED[GetWeapontypeGroup(weapon)]
+end
+
 --- Jogador fazendo outra coisa (painel: actionHide): some com tudo do mundo.
 local function inAction(now)
     local hide = state.settings.actionHide
     local ped = cache.ped
     local busy = (hide.aiming and IsPlayerFreeAiming(cache.playerId))
+        or (hide.armed and isArmed())
         or (hide.combat and (IsPedInMeleeCombat(ped) or IsPedShooting(ped)))
         or (hide.sprinting and IsPedSprinting(ped))
         or (hide.vehicle and cache.vehicle and GetEntitySpeed(cache.vehicle) * 3.6 > hide.vehicleSpeed)

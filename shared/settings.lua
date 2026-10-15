@@ -34,7 +34,7 @@ settings.defaults = {
     dormant = false,
     dormantMs = 5000,
     -- Some com prompt e marcadores enquanto o jogador faz outra coisa (vehicleSpeed em km/h).
-    actionHide = { aiming = true, combat = true, sprinting = true, vehicle = true, vehicleSpeed = 30 },
+    actionHide = { aiming = true, armed = false, combat = true, sprinting = true, vehicle = true, vehicleSpeed = 30 },
     interactKey = 'E', -- padrao do keybind; so vale no restart e pra quem nunca trocou
     useShowKey = true,
     showKey = 'BACK',

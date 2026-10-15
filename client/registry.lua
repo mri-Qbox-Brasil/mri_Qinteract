@@ -11,6 +11,8 @@
     offset...) mais holdTime, hideButton e color do prompt.
 ]]
 
+local persist = require 'client.persist'
+
 local registry = {
     points = {},
     entities = {},
@@ -184,6 +186,18 @@ function registry.removeEntity(netIds, names, resource) removeKeyed(registry.ent
 function registry.addLocalEntity(entities, options, resource) addKeyed(registry.localEntities, entities, options, resource) end
 function registry.removeLocalEntity(entities, names, resource) removeKeyed(registry.localEntities, entities, names, resource) end
 
+---@param fn fun(option: table)
+function registry.forEachOption(fn)
+    local function each(list) for i = 1, #list do fn(list[i]) end end
+
+    for _, point in pairs(registry.points) do each(point.options) end
+    for _, list in pairs(registry.globals) do each(list) end
+    each(registry.everywhere)
+    for _, store in ipairs({ registry.models, registry.entities, registry.localEntities }) do
+        for _, list in pairs(store) do each(list) end
+    end
+end
+
 -- Resource que parou leva as opcoes dele junto.
 AddEventHandler('onClientResourceStop', function(resource)
     local function drop(list)
@@ -206,5 +220,60 @@ AddEventHandler('onClientResourceStop', function(resource)
 
     changed()
 end)
+
+-- An ensure of this resource keeps other resources' options; they only go when their owner stops.
+
+persist.onStop(function()
+    persist.save('registry', {
+        points = registry.points,
+        entities = registry.entities,
+        localEntities = registry.localEntities,
+        models = registry.models,
+        globals = registry.globals,
+        everywhere = registry.everywhere,
+        maxOptionDistance = registry.maxOptionDistance,
+        nextOptionId = nextOptionId,
+        nextPointId = nextPointId,
+    })
+end)
+
+local function restoreList(saved, keep)
+    local list = {}
+    for _, option in ipairs(saved or {}) do
+        local running = GetResourceState(option.resource) == 'started'
+        if running and keep ~= false then
+            list[#list + 1] = persist.decode(option)
+        elseif running then
+            persist.release(option)
+        end
+    end
+    return list
+end
+
+local function restoreKeyed(store, saved, exists)
+    for key, list in pairs(saved or {}) do
+        local restored = restoreList(list, not exists or exists(key))
+        if #restored > 0 then store[key] = restored end
+    end
+end
+
+local saved = persist.take('registry')
+if saved then
+    nextOptionId, nextPointId = saved.nextOptionId, saved.nextPointId
+    registry.maxOptionDistance = saved.maxOptionDistance
+
+    for id, point in pairs(saved.points or {}) do
+        point.options = restoreList(point.options)
+        if #point.options > 0 then registry.points[id] = point end
+    end
+    for kind, list in pairs(saved.globals or {}) do registry.globals[kind] = restoreList(list) end
+    registry.everywhere = restoreList(saved.everywhere)
+    restoreKeyed(registry.models, saved.models)
+    restoreKeyed(registry.entities, saved.entities)
+    -- Entities this resource spawned were deleted with it.
+    restoreKeyed(registry.localEntities, saved.localEntities, DoesEntityExist)
+
+    changed()
+end
 
 return registry

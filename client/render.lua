@@ -75,8 +75,10 @@ local function sameOptions(a, b)
     return true
 end
 
-local function focusContext()
+--- Context for `option`: in a merged target it is the member the option came from.
+local function focusContext(option)
     local target = focus.target
+    target = option and target.sources and target.sources[option._id] or target
     return {
         entity = target.entity or 0,
         coords = scan.anchorOf(target) or (target.point and target.point.coords),
@@ -92,7 +94,7 @@ local active
 local function callHook(option, hook)
     local fn = option[hook]
     if not fn then return end
-    local ok, err = pcall(fn, options.response(option, focusContext()))
+    local ok, err = pcall(fn, options.response(option, focusContext(option)))
     if not ok then lib.print.error(('%s de "%s" (%s) falhou: %s'):format(hook, option.name, option.resource, err)) end
 end
 
@@ -302,11 +304,20 @@ local function setDormant(value)
     dui.send('dormant', value)
 end
 
+-- Tools held like a weapon that other scripts use through the target (jerry can refuel).
+local NOT_ARMED = { [`GROUP_PETROLCAN`] = true, [`GROUP_FIREEXTINGUISHER`] = true, [`GROUP_PARACHUTE`] = true }
+
+local function isArmed()
+    local weapon = cache.weapon
+    return weapon and not NOT_ARMED[GetWeapontypeGroup(weapon)]
+end
+
 --- Jogador fazendo outra coisa (painel: actionHide): some com tudo do mundo.
 local function inAction(now)
     local hide = state.settings.actionHide
     local ped = cache.ped
     local busy = (hide.aiming and IsPlayerFreeAiming(cache.playerId))
+        or (hide.armed and isArmed())
         or (hide.combat and (IsPedInMeleeCombat(ped) or IsPedShooting(ped)))
         or (hide.sprinting and IsPedSprinting(ped))
         or (hide.vehicle and cache.vehicle and GetEntitySpeed(cache.vehicle) * 3.6 > hide.vehicleSpeed)
@@ -361,7 +372,7 @@ RegisterNUICallback('select', function(data, cb)
     local option = optionFrom(data)
     if not option then return end
 
-    local ctx = focusContext()
+    local ctx = focusContext(option)
 
     -- cooldown na opcao troca o padrao.
     local cooldown = tonumber(option.cooldown) or COOLDOWN_MS

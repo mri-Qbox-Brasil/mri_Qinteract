@@ -8,6 +8,7 @@
 local registry = require 'client.registry'
 local state = require 'client.state'
 local exportAs = require 'client.compat.export'
+local persist = require 'client.persist'
 
 local function citizenId()
     if GetResourceState('qbx_core') == 'started' then
@@ -38,6 +39,26 @@ local function hasCitizen(filter)
     return false
 end
 
+-- Wrappers are this resource's functions, so they are rebuilt from the qb option after an ensure.
+local function bindCallbacks(converted, option)
+    local check, citizen = option.canInteract, option.citizenid
+    if check or citizen then
+        converted.canInteract = function(entity, dist)
+            if citizen and not hasCitizen(citizen) then return false end
+            if check then return check(entity, dist, option) end
+            return true
+        end
+    end
+
+    if option.action then
+        local action = option.action
+        converted.onSelect = function(data) action(data.entity) end
+    elseif option.event and option.type == 'qbcommand' then
+        local command = option.event
+        converted.onSelect = function(data) TriggerServerEvent('QBCore:CallCommand', command, data) end
+    end
+end
+
 ---@param option table opcao no formato qb
 ---@param distance number? distance do bloco
 local function convert(option, distance)
@@ -56,35 +77,27 @@ local function convert(option, distance)
     end
     converted.groups = groupMap
 
-    local check, citizen = option.canInteract, option.citizenid
-    if check or citizen then
-        converted.canInteract = function(entity, dist)
-            if citizen and not hasCitizen(citizen) then return false end
-            if check then return check(entity, dist, option) end
-            return true
-        end
-    end
-
     -- No qb a resposta e a propria opcao com a entidade (o registry copia os campos).
     converted.onSelect = nil
-    if option.action then
-        local action = option.action
-        converted.onSelect = function(data) action(data.entity) end
-    elseif option.event then
+    if not option.action and option.event then
         local kind = option.type or 'client'
         if kind == 'server' then
             converted.serverEvent, converted.event = option.event, nil
         elseif kind == 'command' then
             converted.command, converted.event = option.event, nil
         elseif kind == 'qbcommand' then
-            local command = option.event
             converted.event = nil
-            converted.onSelect = function(data) TriggerServerEvent('QBCore:CallCommand', command, data) end
         end
     end
 
+    converted.qbSource = option
+    bindCallbacks(converted, option)
     return converted
 end
+
+registry.forEachOption(function(option)
+    if option.qbSource then bindCallbacks(option, option.qbSource) end
+end)
 
 local function convertAll(params)
     if type(params) ~= 'table' then return {} end
@@ -197,7 +210,8 @@ end)
 ---@param resource 'qb-target' | 'qtarget'
 ---@param globalNames table<string, string[]> tipo -> { export de adicionar, de remover }
 local function register(resource, globalNames)
-    local zones = {} -- nome -> { points = { ids } } ou { entity = handle, names = {...} }
+    local zones = persist.take('qb:' .. resource) or {} -- nome -> { points = { ids } } ou { entity = handle, names = {...} }
+    persist.onStop(function() persist.save('qb:' .. resource, zones) end)
 
     local function handler(name, fn) exportAs(resource, name, fn) end
     local function options(params) return convertAll(params) end

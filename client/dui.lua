@@ -21,7 +21,8 @@ local dui = {
 }
 
 local URL = ('nui://%s/web/build/index.html'):format(cache.resource)
-local TXD = 'mri_qinteract_prompt'
+-- Unique per start, so an ensure never reuses the dict of the destroyed DUI.
+local TXD = ('mri_qinteract_prompt_%d'):format(GetGameTimer())
 local ASPECT = 2.4
 local SUPERSAMPLE = 2
 local MAX_EDGE = 2048
@@ -40,7 +41,7 @@ end
 --- A superficie atual ja carregou.
 function dui.isReady()
     if dui.isOverlay() then return dui.overlayReady end
-    return dui.ready
+    return dui.ready and dui.bound
 end
 
 local function size()
@@ -59,15 +60,25 @@ function dui.create()
     if dui.object then DestroyDui(dui.object) end
 
     generation = generation + 1
-    dui.ready = false
+    local current = generation
+    dui.ready, dui.bound = false, false
     dui.width, dui.height = size()
-    dui.object = CreateDui(URL, dui.width, dui.height)
+    local object = CreateDui(URL, dui.width, dui.height)
+    dui.object = object
 
-    txd = txd or CreateRuntimeTxd(TXD)
-    -- Nome novo a cada recriacao: textura de runtime nao pode ser trocada no lugar.
-    dui.dict = TXD
-    dui.txt = ('prompt_%d'):format(generation)
-    CreateRuntimeTextureFromDuiHandle(txd, dui.txt, GetDuiHandle(dui.object))
+    -- A handle taken before the browser exists gives a white texture (seen after an ensure).
+    CreateThread(function()
+        local timeout = GetGameTimer() + 10000
+        while not IsDuiAvailable(object) and GetGameTimer() < timeout do Wait(0) end
+        if current ~= generation then return end
+
+        txd = txd or CreateRuntimeTxd(TXD)
+        -- Nome novo a cada recriacao: textura de runtime nao pode ser trocada no lugar.
+        dui.dict = TXD
+        dui.txt = ('prompt_%d'):format(current)
+        CreateRuntimeTextureFromDuiHandle(txd, dui.txt, GetDuiHandle(object))
+        dui.bound = true
+    end)
 end
 
 --- Manda pra uma superficie especifica (troca de tema com prompt aberto).

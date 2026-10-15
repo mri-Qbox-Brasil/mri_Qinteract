@@ -30,6 +30,8 @@ local LOS_FLAGS = 1 | 16 -- mundo e objetos
 local LOS_MAX_TARGETS = 8
 -- Caps the scan when some resource registers a huge option distance.
 local MAX_SCAN_RADIUS = 15.0
+-- Targets this close share one marker and one prompt with all their options (prop and zone on it).
+local MERGE_DISTANCE = 0.75
 
 -- SKEL_Spine3
 local PED_CHEST_BONE = 24818
@@ -275,6 +277,63 @@ local function inSight(target, anchor)
     return #(hitCoords - anchor) <= LOS_TOLERANCE
 end
 
+local function sharesOption(members, target)
+    for _, member in ipairs(members) do
+        for _, a in ipairs(member.available) do
+            for _, b in ipairs(target.available) do
+                if a._id == b._id then return true end
+            end
+        end
+    end
+    return false
+end
+
+--- Joins targets whose anchors almost touch; each option keeps its own target in `sources`.
+local function merge(targets)
+    local groups = {}
+    for _, target in ipairs(targets) do
+        local anchor = scan.anchorOf(target)
+        local group
+        for _, g in ipairs(groups) do
+            if anchor and g.anchor and #(g.anchor - anchor) <= MERGE_DISTANCE and not sharesOption(g.members, target) then
+                group = g
+                break
+            end
+        end
+        if group then
+            group.members[#group.members + 1] = target
+        else
+            groups[#groups + 1] = { anchor = anchor, members = { target } }
+        end
+    end
+
+    local merged = {}
+    for _, g in ipairs(groups) do
+        if #g.members == 1 then
+            merged[#merged + 1] = g.members[1]
+        else
+            -- Ordered by key so the prompt anchor and the option order hold still while walking.
+            table.sort(g.members, function(a, b) return a.key < b.key end)
+            local target = table.clone(g.members[1])
+            local keys, available, reach, sources = {}, {}, {}, {}
+            for _, member in ipairs(g.members) do
+                keys[#keys + 1] = member.key
+                target.distance = math.min(target.distance, member.distance)
+                for _, option in ipairs(member.available) do
+                    available[#available + 1] = option
+                    sources[option._id] = member
+                end
+                for _, option in ipairs(member.reach) do reach[#reach + 1] = option end
+            end
+            target.key, target.available, target.reach, target.sources = table.concat(keys, '+'), available, reach, sources
+            merged[#merged + 1] = target
+        end
+    end
+
+    table.sort(merged, function(a, b) return a.distance < b.distance end)
+    return merged
+end
+
 local candidates = {}
 local discoveredAt = 0
 local discoveredVersion = -1
@@ -340,7 +399,7 @@ local function build(hidden)
         end
     end
 
-    scan.targets = targets
+    scan.targets = merge(targets)
 end
 
 -- Quem decide se esta escondido e o client/input.lua (tecla de mostrar).
